@@ -17,26 +17,191 @@ const token = '7440148973:AAGpsaMcbd1OYLIzh8yR8lwAAZzyMVkdqbg';
 const bot = new TelegramBot(token, { polling: true });
 
 
-let chatId = 805411613
+let chatIds = [805411613  ] //963705880
+const keywords = "ابتجكلميى"
+let index = 10
 
+function getKeyword() {
+    index  = ( index + 1) % keywords.length
+    return keywords[index]
+}
 // Function to send a message to the user
 async function sendMessage() {
-    const products = await getDiscountedProducts("ا" , "electronics") 
-    let result = ""
-    if (products.length) {
-        products.forEach((product, index) => {
-            result += `URL number ${index + 1}: ${product.url}\n`;
-        });
-    }
+    try {
+        const products = await getDiscountedProducts(getKeyword() , "electronics") 
+        let result = ""
+        if (products.length) {
+            products.forEach((product, index) => {
+                result += `URL number ${index + 1}: ${product.url}\n`;
+            });
+        }
 
-    if (result) {
-
-        bot.sendMessage(chatId, result);
-    }
+        for(let chatId of chatIds) {
+            if (result) {
+                bot.sendMessage(chatId, result);
+            }else {
+                bot.sendMessage(chatId, "no result");
+                
+            }
+        }
+}catch (error) {
+    console.log("error happen" , error)
+}
 }
 
-// Schedule the message to be sent every 10 minutes (600,000 milliseconds)
-setInterval(sendMessage, 10 * 60 * 1000);
+bot.sendMessage(963705880 , "بحبك")
+
+setInterval(sendMessage,  3 * 60 * 1000);
+
+
+
+
+bot.on('message', async (msg) => {
+    const chatId = msg.chat.id;
+    try{
+    // console.log("Hello")
+    console.log(chatId)
+    let text = msg.text;
+    let result = "";
+    if (text.startsWith("/")) {
+        console.log("It's a command");
+
+        // Check if the command exists in the category map
+        const category = text.replace("/" , "")
+
+        if (category) {
+            const productsURL = await getProducts(getKeyword(), category);
+            // console.log(productsURL)
+
+            productsURL.forEach((product, index) => {
+                result += `URL number ${index + 1}: ${product}\n`;
+            });
+
+        } else {
+            result = "Unknown command. Please use a valid category command.";
+        }
+    }
+
+    if (text.includes("keyword")) {
+        const keyword = text.replace("keyword" , "")
+
+        const productsURL = await getProducts(keyword);
+     
+
+        productsURL.forEach((url, index) => {
+            result += `url number ${index + 1}: ${url}\n`;
+        });
+
+        
+    }
+    if (!result) {
+        result = "Please include keyword"
+    }
+    // Send a response
+    bot.sendMessage(chatId, `${result}`);
+}catch (error) {
+    bot.sendMessage(chatId, `sorry, error happen try again `);
+    console.log("Error happen" , error)
+}
+});
+
+
+const axios = require('axios');
+const amazonScraper = require('./lib/index');
+
+
+ async function getProducts (keyword , category = "")  {
+    console.log(keyword , category)
+    const products = await amazonScraper.products({
+        keyword: keyword || "شاشه",
+        number: 50,
+        country: 'EG' ,
+        category : category
+    });
+    // console.log(products)
+ 
+   
+    // Use Promise.all to wait for all promises to resolve
+    const result = await Promise.all(products.result.slice(0, 10).map(async (product) => {
+        // const url = await createLink("test", product.url);
+
+        return product.url
+        // return {
+        //     title: product.title,
+        //     price: {
+        //         ...product.price
+        //     },
+        //     url: url,
+        //     bestSeller: product.bestSeller
+        // };
+    }));
+
+    return result
+};
+
+
+
+
+
+async function getDiscountedProducts (keyword , category = "")  {
+    console.log(keyword , category)
+    const products = await amazonScraper.products({
+        keyword: keyword , 
+        number: 50,
+        country: 'EG' ,
+        category : category
+    });
+    let discountedProducts = [];
+
+    for (const product of products.result) {
+        const productId = product.asin;  
+        const productPrice = product.price.current_price;  
+
+        const dbProduct = await getProductFromDB(productId);
+
+        if (dbProduct) {
+            const dbPrice = dbProduct.price;
+
+            if (productPrice < dbPrice * 0.8) {
+                discountedProducts.push(product);
+            }
+
+        } else {
+            await addProductToDB(productId, productPrice);
+        }
+    }
+
+    return discountedProducts;
+  
+};
+
+
+function getProductFromDB(id) {
+    return new Promise((resolve, reject) => {
+        db.get('SELECT id, price FROM products WHERE id = ?', [id], (err, row) => {
+            if (err) {
+                return reject(err);
+            }
+            resolve(row);  // If the product exists, `row` will contain the data
+        });
+    });
+}
+
+function addProductToDB(id, price) {
+    return new Promise((resolve, reject) => {
+        db.run('INSERT INTO products (id, price) VALUES (?, ?)', [id, price], function(err) {
+            if (err) {
+                return reject(err);
+            }
+            resolve();
+        });
+    });
+}
+
+
+
+
+
 
 
 
@@ -71,169 +236,6 @@ const categoryMap = {
     "/videogames": "videogames-intl-ship",
     "/womensfashion": "fashion-womens-intl-ship",
 };
-
-
-bot.on('message', async (msg) => {
-    console.log("Hello")
-    const chatId = msg.chat.id;
-    // console.log(chatId)
-    let text = msg.text;
-    let result = "";
-    if (text.startsWith("/")) {
-        console.log("It's a command");
-
-        // Check if the command exists in the category map
-        const category = text.replace("/" , "")
-
-        if (category) {
-            const productsURL = await getProducts("ا" , category);
-            console.log(productsURL)
-
-            productsURL.forEach((product, index) => {
-                result += `URL number ${index + 1}: ${product}\n`;
-            });
-
-        } else {
-            result = "Unknown command. Please use a valid category command.";
-        }
-    }
-
-    if (text.includes("keyword")) {
-        const keyword = text.replace("keyword" , "")
-
-        const productsURL = await getProducts(keyword);
-     
-
-        productsURL.forEach((url, index) => {
-            result += `url number ${index + 1}: ${url}\n`;
-        });
-
-        
-    }
-    if (!result) {
-        result = "Please include keyword"
-    }
-    // Send a response
-    bot.sendMessage(chatId, `${result}`);
-});
-
-
-const axios = require('axios');
-const amazonScraper = require('./lib/index');
-
-
- async function getProducts (keyword , category = "")  {
-    console.log(keyword , category)
-    const products = await amazonScraper.products({
-        keyword: keyword || "شاشه",
-        // number: 100,
-        country: 'EG' ,
-        category : category
-    });
-    console.log(products)
- 
-   
-    // Use Promise.all to wait for all promises to resolve
-    const result = await Promise.all(products.result.slice(0, 10).map(async (product) => {
-        // const url = await createLink("test", product.url);
-
-        return product.url
-        // return {
-        //     title: product.title,
-        //     price: {
-        //         ...product.price
-        //     },
-        //     url: url,
-        //     bestSeller: product.bestSeller
-        // };
-    }));
-
-    return result
-};
-
-
-
-
-
-async function getDiscountedProducts (keyword , category = "")  {
-    console.log(keyword , category)
-    const products = await amazonScraper.products({
-        keyword: keyword || "شاشه",
-        // number: 100,
-        country: 'EG' ,
-        category : category
-    });
-    console.log(products)
-    let discountedProducts = [];
-
-    for (const product of products.result) {
-        const productId = product.asin;  // Assuming `asin` as the product id
-        const productPrice = product.price.current_price;  // Assuming price comes as `current_price`
-
-        const dbProduct = await getProductFromDB(productId);
-
-        if (dbProduct) {
-            const dbPrice = dbProduct.price;
-
-            // If the price is less than 20% of the stored price, add to the discounted list
-            if (productPrice < dbPrice * 0.8) {
-                discountedProducts.push(product);
-            }
-
-        } else {
-            // If the product is not in the database, add it
-            await addProductToDB(productId, productPrice);
-        }
-    }
-
-    return discountedProducts;
-    // products.forEach((product) => {
-        
-    // })
-    // // Use Promise.all to wait for all promises to resolve
-    // const result = await Promise.all(products.result.slice(0, 10).map(async (product) => {
-    //     // const url = await createLink("test", product.url);
-
-    //     return product.url
-    //     // return {
-    //     //     title: product.title,
-    //     //     price: {
-    //     //         ...product.price
-    //     //     },
-    //     //     url: url,
-    //     //     bestSeller: product.bestSeller
-    //     // };
-    // }));
-
-    // return result
-};
-
-// Function to check if the product exists in the database
-function getProductFromDB(id) {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT id, price FROM products WHERE id = ?', [id], (err, row) => {
-            if (err) {
-                return reject(err);
-            }
-            resolve(row);  // If the product exists, `row` will contain the data
-        });
-    });
-}
-
-// Function to add a product to the database
-function addProductToDB(id, price) {
-    return new Promise((resolve, reject) => {
-        db.run('INSERT INTO products (id, price) VALUES (?, ?)', [id, price], function(err) {
-            if (err) {
-                return reject(err);
-            }
-            resolve();
-        });
-    });
-}
-
-
-
 
 
 async function createLink(text ,  url) {
