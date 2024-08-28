@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 const AmazonScraper = require('../lib');
-
+console.log("Helloooo")
 const startScraper = async (argv) => {
     argv.scrapeType = argv._[0];
     try {
         const data = await AmazonScraper[argv.scrapeType]({ ...argv, cli: true, rating: [argv['min-rating'], argv['max-rating']] });
         switch (argv.scrapeType) {
             case 'countries':
+                console.log("hello")
                 console.table(data);
                 break;
             case 'categories':
