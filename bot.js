@@ -17,7 +17,7 @@ const token = '7440148973:AAGpsaMcbd1OYLIzh8yR8lwAAZzyMVkdqbg';
 const bot = new TelegramBot(token, { polling: true });
 
 
-let chatIds = [805411613  ] //963705880
+let chatIds = [805411613 , 6312816792 ] //963705880
 const keywords = "ابتجكلميى"
 let index = 10
 
@@ -49,7 +49,6 @@ async function sendMessage() {
 }
 }
 
-bot.sendMessage(963705880 , "بحبك")
 
 setInterval(sendMessage,  3 * 60 * 1000);
 
