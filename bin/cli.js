@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const AmazonScraper = require('../lib');
-console.log("Helloooo")
+// console.log("Helloooo")
 const startScraper = async (argv) => {
     argv.scrapeType = argv._[0];
     try {
@@ -29,6 +29,7 @@ const startScraper = async (argv) => {
                 break;
         }
     } catch (error) {
+        console.log("get here")
         console.log(error);
     }
 };

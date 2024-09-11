@@ -7,7 +7,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const sqlite3 = require('sqlite3').verbose();
 
 // Connect to SQLite database (or create a new one)
-let db = new sqlite3.Database('./products.db', (err) => {
+let db = new sqlite3.Database('./grocery/grocery_products.db', (err) => {
   if (err) {
     console.error(err.message);
   } else {
@@ -16,12 +16,12 @@ let db = new sqlite3.Database('./products.db', (err) => {
 });
 
 
-const token = '7440148973:AAGpsaMcbd1OYLIzh8yR8lwAAZzyMVkdqbg';
+const token = '7414992725:AAEMOMqqFplvAVY_Tzyy13v5mUdTJ8dp25E';
+
 const bot = new TelegramBot(token, { polling: true });
 
 
-
-let chatIds = [805411613  ] //963705880 , 6312816792
+let chatIds = [805411613  ] //963705880 - 6312816792
 const keywords = "ابجكلميى"
 let index = 10
 
@@ -31,11 +31,11 @@ function getKeyword() {
 }
 
 const fs = require('fs');
-const path = './sentProducts.json'; // Path to the file that stores sent data
+const path = './grocery/sentProducts.json'; // Path to the file that stores sent data
 
 async function sendMessage() {
     try {
-        const products = await getDiscountedProducts(getKeyword(), "electronics");
+        const products = await getDiscountedProducts(getKeyword(), "grocery");
         // console.log(products)
         let result = "";
         const today = new Date().toISOString().split('T')[0]; // Get today's date as YYYY-MM-DD
@@ -48,7 +48,7 @@ async function sendMessage() {
 
         if (products.length) {
             products.forEach((product, index) => {
-                const productInfo = `URL number ${index + 1}: ${product.url} - was ${product.price.before_price} be ${product.price.current_price}`;
+                const productInfo = `URL number ${index + 1}: ${product.url} - was ${product.prevPrice} be ${product.currentPrice}`;
                 const productRecord = sentData[today]?.find(item => item.url === product.url);
 
                 // Check if the product has been sent today, and if the price has changed
@@ -67,8 +67,8 @@ async function sendMessage() {
                         // Add a new record if the product hasn't been sent today
                         sentData[today].push({
                             url: product.url,
-                            prevPrice:product.price.before_price ,
-                            currentPrice: product.price.current_price
+                            prevPrice: product.prevPrice,
+                            currentPrice: product.currentPrice
                         });
                     }
                 }
@@ -94,8 +94,7 @@ async function sendMessage() {
 }
 
 // Run every 30 minutes
-// sendMessage()
-setInterval(sendMessage,  5 * 60 * 1000);
+setInterval(sendMessage,  2 * 60 * 1000);
 
 // // Function to send a message to the user
 // async function sendMessage() {
@@ -179,19 +178,17 @@ bot.on('message', async (msg) => {
 
 
 const axios = require('axios');
-const amazonScraper = require('./lib/index');
+const amazonScraper = require('../lib/index');
 
 
  async function getProducts (keyword , category = "")  {
-    console.log(keyword , category)
+    // console.log(keyword , category)
     const products = await amazonScraper.products({
         keyword: keyword || "شاشه",
-        number: 75,
+        number: 50,
         country: 'EG' ,
-        category : category
+        category : "grocery"
     });
-
-
     // console.log(products)
  
    
@@ -214,114 +211,57 @@ const amazonScraper = require('./lib/index');
 };
 
 
-let turn = true
-function shuffleArray(array) {
-    // Fisher-Yates (aka Knuth) Shuffle algorithm to randomize array
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-}
+
+
 
 async function getDiscountedProducts (keyword , category = "")  {
-    // console.log(keyword , category)
-
-    let products = []
-    if(turn) {
-        products = await amazonScraper.products({
-            keyword: keyword , 
-            number: 75,
-            country: 'EG' ,
-            category : category
-        });
-        products = products.result
-    }else {
-        products = await getProductsFromDB()
-        products = shuffleArray(products)
-        products = products.slice(0 , 100)
-    }
-
-    const productIds = products.map((p) => p.asin || p.id)
-    console.log(productIds)
+    console.log(keyword , category)
+    const products = await amazonScraper.products({
+        keyword: keyword , 
+        number: 50,
+        country: 'EG' ,
+        category : category
+    });
     let discountedProducts = [];
 
-    for (const product of products) {
-        try {
-        // console.log(product.item_available)
-        var productId = product.asin || product.id;  
-        let productFromAmazon = await get_product_by_asin(productId)
-        const current_price = productFromAmazon?.price?.current_price  || product?.price?.current_price || product?.price
-        const dbProduct = await getProductFromDB(productId);
-        let beforePrice = dbProduct?.price || current_price
+    for (const product of products.result) {
+        const productId = product.asin;  
+        const productPrice = product.price.current_price;  
+        const price_from = await get_product_price(productId)
 
-        if(!productFromAmazon.item_available) {
+        const dbProduct = await getProductFromDB(productId);
+
+        if (!price_from.available) {
             continue
         }
+
         if (dbProduct) {
-            beforePrice = dbProduct.price 
+            const dbPrice = dbProduct.price;
+            const price_web = price_from.previousPrice || dbPrice
 
-            if(current_price &&  current_price < beforePrice * 0.8) {
-                discountedProducts.push(productFromAmazon);
-            }else if (beforePrice < current_price) {
-                await updateProductPrice(productId , current_price)
+
+
+            if (productPrice < price_web * 0.7) {
+                product.currentPrice = productPrice
+                product.prevPrice = price_web
+                discountedProducts.push(product);
+                // await updateProductPrice
             }
+
         } else {
-            if(current_price){
-                addProductToDB(productId, current_price); 
-            }
-
-            const price_from_kanbkam =  await get_product_price(productId)
-            if (price_from_kanbkam.rate ===3 ){
-                discountedProducts.push(price_from_kanbkam)
-            }
+            const price_web = price_from.previousPrice || productPrice
             
-        }
-        productFromAmazon.price.before_price = beforePrice
-    }catch {
-        console.log(`error in ${productId} ${turn}`)
-    }
 
-    }
-    // turn = !turn
-
-
-
-
-    //     // const productPrice = product.price.current_price;  
-    //     // const price_from = await get_product_price(productId)
-
-
-    //     if (!price_from.available) {
-    //         continue
-    //     }
-
-    //     if (dbProduct) {
-    //         const dbPrice = dbProduct.price;
-    //         const price_web = price_from.previousPrice || dbPrice
-
-
-
-    //         if (productPrice < price_web * 0.7) {
-    //             product.currentPrice = productPrice
-    //             product.prevPrice = price_web
-    //             discountedProducts.push(product);
-    //             // await updateProductPrice
-    //         }
-
-    //     } else {
-    //         const price_web = price_from.previousPrice || productPrice
-
-    //             if (productPrice < price_web * 0.7) {
-    //                 product.currentPrice = productPrice
-    //                 product.prevPrice = price_web
-    //                 discountedProducts.push(product);
-    //                 // await updateProductPrice
-    //             }
+                if (productPrice < price_web * 0.7) {
+                    product.currentPrice = productPrice
+                    product.prevPrice = price_web
+                    discountedProducts.push(product);
+                    // await updateProductPrice
+                }
                 
-    //         await addProductToDB(productId, price_from.previousPrice || productPrice);
-    //     }
-    // }
+            await addProductToDB(productId, price_from.previousPrice || productPrice);
+        }
+    }
 
     return discountedProducts;
   
@@ -458,34 +398,10 @@ function get_product_price(id) {
 
 
 
-function getProductsFromDB() {
-    return new Promise((resolve, reject) => {
-        db.all('SELECT id, price FROM products order by id', [], (err, row) => {
-            
-            if (err) {
-                return reject(err);
-            }
-            resolve(row);  // If the product exists, `row` will contain the data
-        });
-    });
-}
 
- async function get_product_by_asin (id){
-    try {
-    const product = await amazonScraper.asin({
-        asin : id ,
-        country : "EG"  ,
-        randomUa : true
-    });
-   
-    return product.result[0]
-}catch {
-    console.log(`failed to fetch ${id}`)
-    return {}
-}
-    // const data = await get_product_price("B0BWWP9CXK")
-    // console.log(data)
-}
+
+
+
 
 
 const categoryMap = {

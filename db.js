@@ -2,7 +2,7 @@
 const sqlite3 = require('sqlite3').verbose();
 
 // Connect to SQLite database (or create a new one)
-let db = new sqlite3.Database('./products.db', (err) => {
+let db = new sqlite3.Database('./grocery_products.db', (err) => {
   if (err) {
     console.error(err.message);
   } else {
