@@ -21,7 +21,7 @@ const bot = new TelegramBot(token, { polling: true });
 
 
 
-let chatIds = [805411613  ] //963705880 , 6312816792
+let chatIds = [805411613 , 6312816792   ] //963705880 , 6312816792
 const keywords = "ابجكلميى"
 let index = 10
 
@@ -48,7 +48,11 @@ async function sendMessage() {
 
         if (products.length) {
             products.forEach((product, index) => {
-                const productInfo = `URL number ${index + 1}: ${product.url} - was ${product.price.before_price} be ${product.price.current_price}`;
+                let productInfo = `URL number ${index + 1}: ${product.url} - was ${product?.price?.before_price || "not sure"} be ${product?.price?.current_price || "not sure"}`;
+
+                if(product.not_sure) {
+                    productInfo += " Not Sure 😢"
+                }
                 const productRecord = sentData[today]?.find(item => item.url === product.url);
 
                 // Check if the product has been sent today, and if the price has changed
@@ -95,7 +99,7 @@ async function sendMessage() {
 
 // Run every 30 minutes
 // sendMessage()
-setInterval(sendMessage,  5 * 60 * 1000);
+setInterval(sendMessage,  2 * 60 * 1000);
 
 // // Function to send a message to the user
 // async function sendMessage() {
@@ -242,42 +246,62 @@ async function getDiscountedProducts (keyword , category = "")  {
         products = products.slice(0 , 100)
     }
 
-    const productIds = products.map((p) => p.asin || p.id)
-    console.log(productIds)
+    // const productIds = products.map((p) => p.asin || p.id)
+    // console.log(productIds)
     let discountedProducts = [];
 
     for (const product of products) {
         try {
-        // console.log(product.item_available)
-        var productId = product.asin || product.id;  
-        let productFromAmazon = await get_product_by_asin(productId)
-        const current_price = productFromAmazon?.price?.current_price  || product?.price?.current_price || product?.price
-        const dbProduct = await getProductFromDB(productId);
-        let beforePrice = dbProduct?.price || current_price
-
-        if(!productFromAmazon.item_available) {
-            continue
-        }
-        if (dbProduct) {
-            beforePrice = dbProduct.price 
-
-            if(current_price &&  current_price < beforePrice * 0.8) {
-                discountedProducts.push(productFromAmazon);
-            }else if (beforePrice < current_price) {
-                await updateProductPrice(productId , current_price)
-            }
-        } else {
-            if(current_price){
-                addProductToDB(productId, current_price); 
-            }
-
-            const price_from_kanbkam =  await get_product_price(productId)
-            if (price_from_kanbkam.rate ===3 ){
-                discountedProducts.push(price_from_kanbkam)
-            }
+            // console.log(product.item_available)
+            var productId = product.asin || product.id;  
             
-        }
-        productFromAmazon.price.before_price = beforePrice
+            // let productFromAmazon = await get_product_by_asin(productId)
+            const current_price =  product?.price?.current_price || product?.price // productFromAmazon?.price?.current_price  ||
+            const dbProduct = await getProductFromDB(productId);
+            let beforePrice = dbProduct?.price || current_price
+            if(current_price != beforePrice) {
+
+                console.log(productId , beforePrice , current_price)
+            }
+
+            // if(!productFromAmazon.item_available) {
+            //     continue
+            // }
+            if (dbProduct) {
+                beforePrice = dbProduct.price 
+
+                if(current_price &&  current_price < beforePrice * 0.7) {
+
+                    const productFromAmazon = await get_product_by_asin(productId)
+                    if (JSON.stringify(productFromAmazon) !== "{}"){
+
+                       if((!productFromAmazon.item_available) && (!productFromAmazon.seller) ){
+                            continue
+                       }else {
+                           discountedProducts.push(product); // productFromAmazon
+                       }
+
+                    }else {
+                        product.not_sure = true 
+                        discountedProducts.push(product); // productFromAmazon
+                    }
+                }else if (beforePrice < current_price) {
+                    await updateProductPrice(productId , current_price)
+                }
+            } else {
+                if(current_price){
+                    addProductToDB(productId, current_price); 
+                }
+
+                const price_from_kanbkam =  await get_product_price(productId)
+                if (price_from_kanbkam.rate ===3 ){
+                    console.log("kanbkam object" , price_from_kanbkam)
+                    price_from_kanbkam.not_sure = true
+                    discountedProducts.push(price_from_kanbkam)
+                }
+                
+            }
+            // productFromAmazon.price.before_price = beforePrice
     }catch {
         console.log(`error in ${productId} ${turn}`)
     }
@@ -351,7 +375,7 @@ function addProductToDB(id, price) {
 }
 function updateProductPrice(id, price) {
     return new Promise((resolve, reject) => {
-        db.run('update products set price = ? where id = ? ', [price.previousPrice, p.id], function(err) {
+        db.run('update products set price = ? where id = ? ', [price, id], function(err) {
             if (err) {
                 return reject(err);
             }
@@ -556,3 +580,11 @@ async function createLink(text ,  url) {
         return url ;
     }
 }
+
+// (async()=>{
+    
+//     const products = await getDiscountedProducts("ه" , "electronics")
+    
+//     console.log("discounted ones" , products)
+
+// })()

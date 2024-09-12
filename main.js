@@ -4,18 +4,18 @@ const amazonScraper = require('./lib/index');
 
  async function getProducts (keyword , category = "")  {
     console.log(keyword , category)
-    const products = await amazonScraper.products({
-        keyword: keyword || "شاشه",
-        number: 75,
-        country: 'EG' ,
-        category : category ,
-        randomUa : true
-    });
-    // const products= await amazonScraper.asin({
-    //     asin : keyword ,
-    //     country : "EG"  ,
+    // const products = await amazonScraper.products({
+    //     keyword: keyword || "شاشه",
+    //     number: 75,
+    //     country: 'EG' ,
+    //     category : category ,
     //     randomUa : true
     // });
+    const products= await amazonScraper.asin({
+        asin : keyword ,
+        country : "EG"  ,
+        randomUa : true
+    });
 
     const result = await Promise.all(products.result.slice(0, 10).map(async (product) => {
 
@@ -24,4 +24,4 @@ const amazonScraper = require('./lib/index');
 
     return result
 };
-getProducts("B0BWWP9CXK" , "electronics")
+getProducts("B0C7N46TSK" , "electronics")
